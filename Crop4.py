@@ -11,7 +11,7 @@ class CropImageApp:
         self.MAX_ZOOM = 5.0
 
         self.root = root
-        self.root.title("Image Cropper")
+        self.root.title("ОБРЕЗОК by RomixERR")
         self.root.geometry("900x700")
 
         self.dnd = root  # просто сохраняем ссылку, она уже drag-n-drop-совместимая
@@ -29,7 +29,10 @@ class CropImageApp:
         self.rect = None
         self.size_text = None
         self.start_x = self.start_y = None
+        self.cur_x = self.cur_y = None
+        self.smesh_x = self.smesh_y = None
         self.crop_box_display = None
+        self.zoom_shift_x = self.zoom_shift_y = .0
 
         # Меню
         self.menu = tk.Menu(self.root)
@@ -38,14 +41,19 @@ class CropImageApp:
         options_menu = tk.Menu(self.menu, tearoff=0)
         options_menu.add_checkbutton(label="Фиксировать квадрат", onvalue=True, offvalue=False,
                                      variable=self.square_crop)
+        options_menu.add_checkbutton(label="Дрочить на лолей", onvalue=True, offvalue=False,
+                                     variable=self.square_crop)
         self.menu.add_cascade(label="Опции", menu=options_menu)
 
         self.menu.add_command(label="Save", command=self.save_cropped_image)
 
         # События
-        self.canvas.bind("<ButtonPress-1>", self.on_button_press)
-        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
+        self.canvas.bind("<ButtonPress-1>", self.on_button_press_1)
+        self.canvas.bind("<ButtonPress-3>", self.on_button_press_3)
+        self.canvas.bind("<B1-Motion>", self.on_mouse_drag_1)
+        self.canvas.bind("<B3-Motion>", self.on_mouse_drag_3)
+        self.canvas.bind("<ButtonRelease-1>", self.on_button_release_1)
+        self.canvas.bind("<ButtonRelease-3>", self.on_button_release_3)
         self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)  # Windows
         #self.canvas.bind("<Button-4>", self.on_mouse_wheel)  # Linux scroll up
         #self.canvas.bind("<Button-5>", self.on_mouse_wheel)  # Linux scroll down
@@ -64,13 +72,14 @@ class CropImageApp:
         if self.image_path:
             self.load_image(self.image_path)
 
-    def load_image(self, file_path):
+    def load_image(self, file_path ):
         self.original_image = Image.open(file_path)
-        self.resize_and_display()
+        self.resize_and_display(None)
 
-    def resize_and_display(self):
+    def resize_and_display(self,event):
         if not self.original_image:
             return
+
 
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
@@ -80,18 +89,27 @@ class CropImageApp:
         # Масштабируем с учётом окна и текущего зума
         fit_ratio = min(canvas_width / img_width, canvas_height / img_height)
         self.scale_ratio = fit_ratio * self.zoom_factor
+        if event:
+            cur_x = event.x
+            cur_y = event.y
+            self.zoom_shift_x = img_width * self.scale_ratio / -2 - (cur_x - img_width * self.scale_ratio) / self.scale_ratio / 4
+            self.zoom_shift_y = img_height * self.scale_ratio / -2 - (cur_y - img_height * self.scale_ratio) / self.scale_ratio / 4
+        else:
+            self.zoom_shift_x = 0
+            self.zoom_shift_y = 0
 
         display_size = (
             int(img_width * self.scale_ratio),
             int(img_height * self.scale_ratio)
         )
-        self.display_image = self.original_image.resize(display_size, Image.ANTIALIAS)
+
+        self.display_image = self.original_image.resize(display_size, Image.Resampling.LANCZOS)
 
         self.tk_image = ImageTk.PhotoImage(self.display_image)
         self.canvas.delete("all")
-        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+        self.canvas.create_image(self.zoom_shift_x, self.zoom_shift_y, anchor="nw", image=self.tk_image)
 
-    def on_button_press(self, event):
+    def on_button_press_1(self, event):
         self.start_x = event.x
         self.start_y = event.y
         if self.rect:
@@ -101,47 +119,69 @@ class CropImageApp:
         self.rect = self.canvas.create_rectangle(
             self.start_x, self.start_y, self.start_x, self.start_y, outline="red"
         )
+    def on_button_press_3(self, event):
+        print()
+        self.smesh_x = event.x-self.start_x
+        self.smesh_y = event.y - self.start_y
 
-    def on_mouse_drag(self, event):
-        cur_x, cur_y = event.x, event.y
-        dx = cur_x - self.start_x
-        dy = cur_y - self.start_y
+
+
+    def on_mouse_drag_1(self, event):
+        self.cur_x, self.cur_y = event.x, event.y
+        dx = self.cur_x - self.start_x
+        dy = self.cur_y - self.start_y
 
         if self.square_crop.get():
             # Делает квадратную область по меньшей из сторон
             side = min(abs(dx), abs(dy))
-            cur_x = self.start_x + side * (1 if dx >= 0 else -1)
-            cur_y = self.start_y + side * (1 if dy >= 0 else -1)
+            self.cur_x = self.start_x + side * (1 if dx >= 0 else -1)
+            self.cur_y = self.start_y + side * (1 if dy >= 0 else -1)
 
-        self.canvas.coords(self.rect, self.start_x, self.start_y, cur_x, cur_y)
+        self.canvas.coords(self.rect, self.start_x, self.start_y, self.cur_x, self.cur_y)
 
-        width = abs(cur_x - self.start_x)
-        height = abs(cur_y - self.start_y)
+        width = abs(self.cur_x - self.start_x)
+        height = abs(self.cur_y - self.start_y)
 
         if self.size_text:
             self.canvas.delete(self.size_text)
 
         label = f"{int(width / self.scale_ratio)} x {int(height / self.scale_ratio)}"
         self.size_text = self.canvas.create_text(
-            min(self.start_x, cur_x) + 5, min(self.start_y, cur_y) - 10,
+            min(self.start_x, self.cur_x) + 5, min(self.start_y, self.cur_y) - 10,
             anchor="nw", text=label, fill="white", font=("Arial", 10, "bold")
         )
 
-    def on_button_release(self, event):
-        end_x, end_y = event.x, event.y
+    def on_mouse_drag_3(self, event):
+        dx = event.x - self.start_x
+        dy = event.y - self.start_y
+        self.cur_x = self.cur_x + dx-self.smesh_x
+        self.cur_y = self.cur_y + dy-self.smesh_y
+        self.start_x = self.start_x + dx-self.smesh_x
+        self.start_y = self.start_y + dy-self.smesh_y
 
-        dx = end_x - self.start_x
-        dy = end_y - self.start_y
+        self.canvas.coords(self.rect, self.start_x, self.start_y, self.cur_x, self.cur_y)
 
-        if self.square_crop.get():
-            # Делает квадратную область по меньшей из сторон
-            side = min(abs(dx), abs(dy))
-            end_x = self.start_x + side * (1 if dx >= 0 else -1)
-            end_y = self.start_y + side * (1 if dy >= 0 else -1)
+        width = abs(self.cur_x - self.start_x)
+        height = abs(self.cur_y - self.start_y)
 
-        x1, y1 = min(self.start_x, end_x), min(self.start_y, end_y)
-        x2, y2 = max(self.start_x, end_x), max(self.start_y, end_y)
+        if self.size_text:
+            self.canvas.delete(self.size_text)
+
+        label = f"{int(width / self.scale_ratio)} x {int(height / self.scale_ratio)}"
+        self.size_text = self.canvas.create_text(
+            min(self.start_x, self.cur_x) + 5, min(self.start_y, self.cur_y) - 10,
+            anchor="nw", text=label, fill="white", font=("Arial", 10, "bold")
+        )
+
+    def on_button_release_1(self, event):
+        x1,y1,x2,y2=self.start_x,self.start_y,self.cur_x,self.cur_y
         self.crop_box_display = (x1, y1, x2, y2)
+
+
+    def on_button_release_3(self, event):
+        x1,y1,x2,y2=self.start_x,self.start_y,self.cur_x,self.cur_y
+        self.crop_box_display = (x1, y1, x2, y2)
+
 
     def on_mouse_wheel(self, event):
         if not self.original_image:
@@ -149,11 +189,11 @@ class CropImageApp:
 
         # Колёсико вверх — увеличение, вниз — уменьшение
         if event.num == 5 or event.delta == -120:
-            self.zoom_factor = max(self.MIN_ZOOM, self.zoom_factor - 0.1)
+            self.zoom_factor = max(self.MIN_ZOOM, self.zoom_factor - self.zoom_factor/5)
         elif event.num == 4 or event.delta == 120:
-            self.zoom_factor = min(self.MAX_ZOOM, self.zoom_factor + 0.1)
+            self.zoom_factor = min(self.MAX_ZOOM, self.zoom_factor + self.zoom_factor/5)
 
-        self.resize_and_display()
+        self.resize_and_display(event)
 
     def save_cropped_image(self):
         if not self.crop_box_display or not self.original_image:
@@ -161,7 +201,7 @@ class CropImageApp:
 
         x1, y1, x2, y2 = self.crop_box_display
         scale = 1 / self.scale_ratio
-        crop_box_original = (int(x1 * scale), int(y1 * scale), int(x2 * scale), int(y2 * scale))
+        crop_box_original = (int((x1 - self.zoom_shift_x) * scale), int((y1 - self.zoom_shift_y) * scale), int((x2 - self.zoom_shift_x) * scale), int((y2 - self.zoom_shift_y) * scale))
 
         cropped_image = self.original_image.crop(crop_box_original)
 
@@ -189,7 +229,7 @@ class CropImageApp:
     def on_canvas_resize(self, event):
         # Перерисовка изображения при ресайзе окна
         if self.original_image:
-            self.resize_and_display()
+            self.resize_and_display(None)
 
 if __name__ == "__main__":
     from tkinterdnd2 import TkinterDnD
