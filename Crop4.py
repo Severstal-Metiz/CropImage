@@ -41,8 +41,8 @@ class CropImageApp:
         options_menu = tk.Menu(self.menu, tearoff=0)
         options_menu.add_checkbutton(label="Фиксировать квадрат", onvalue=True, offvalue=False,
                                      variable=self.square_crop)
-        options_menu.add_checkbutton(label="Дрочить на лолей", onvalue=True, offvalue=False,
-                                     variable=self.square_crop)
+        options_menu.add_command(label="Zoom reset",command=self.reset_zoom)
+
         self.menu.add_cascade(label="Опции", menu=options_menu)
 
         self.menu.add_command(label="Save", command=self.save_cropped_image)
@@ -76,27 +76,41 @@ class CropImageApp:
         self.original_image = Image.open(file_path)
         self.resize_and_display(None)
 
-    def resize_and_display(self,event):
+    def reset_zoom(self):
+        self.zoom_shift_x = 0
+        self.zoom_shift_y = 0
+        self.zoom_factor = 1
+        self.resize_and_display(None)
+
+    def resize_and_display(self, event):
         if not self.original_image:
             return
 
-
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
-
         img_width, img_height = self.original_image.size
 
-        # Масштабируем с учётом окна и текущего зума
         fit_ratio = min(canvas_width / img_width, canvas_height / img_height)
+
+        # Сохраняем старый масштаб и сдвиг
+        old_scale = self.scale_ratio
+        old_shift_x = self.zoom_shift_x
+        old_shift_y = self.zoom_shift_y
+
         self.scale_ratio = fit_ratio * self.zoom_factor
+
         if event:
-            cur_x = event.x
-            cur_y = event.y
-            self.zoom_shift_x = img_width * self.scale_ratio / -2 - (cur_x - img_width * self.scale_ratio) / self.scale_ratio / 4
-            self.zoom_shift_y = img_height * self.scale_ratio / -2 - (cur_y - img_height * self.scale_ratio) / self.scale_ratio / 4
+            # Координаты курсора в пространстве изображения ДО зума
+            image_x = (event.x - old_shift_x) / old_scale
+            image_y = (event.y - old_shift_y) / old_scale
+
+            # Новые сдвиги так, чтобы курсор указывал на ту же точку
+            self.zoom_shift_x = event.x - image_x * self.scale_ratio
+            self.zoom_shift_y = event.y - image_y * self.scale_ratio
         else:
-            self.zoom_shift_x = 0
-            self.zoom_shift_y = 0
+            # Центрируем по умолчанию
+            self.zoom_shift_x = (canvas_width - img_width * self.scale_ratio) / 2
+            self.zoom_shift_y = (canvas_height - img_height * self.scale_ratio) / 2
 
         display_size = (
             int(img_width * self.scale_ratio),
@@ -104,7 +118,6 @@ class CropImageApp:
         )
 
         self.display_image = self.original_image.resize(display_size, Image.Resampling.LANCZOS)
-
         self.tk_image = ImageTk.PhotoImage(self.display_image)
         self.canvas.delete("all")
         self.canvas.create_image(self.zoom_shift_x, self.zoom_shift_y, anchor="nw", image=self.tk_image)
@@ -199,7 +212,12 @@ class CropImageApp:
         if not self.crop_box_display or not self.original_image:
             return
 
-        x1, y1, x2, y2 = self.crop_box_display
+        xt1, yt1, xt2, yt2 = self.crop_box_display
+        x1 = min(xt1, xt2)
+        y1 = min(yt1, yt2)
+        x2 = max(xt1, xt2)
+        y2 = max(yt1, yt2)
+
         scale = 1 / self.scale_ratio
         crop_box_original = (int((x1 - self.zoom_shift_x) * scale), int((y1 - self.zoom_shift_y) * scale), int((x2 - self.zoom_shift_x) * scale), int((y2 - self.zoom_shift_y) * scale))
 
