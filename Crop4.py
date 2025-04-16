@@ -3,6 +3,7 @@ from tkinter import filedialog
 from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk
 import os
+import re
 
 class CropImageApp:
     def __init__(self, root):
@@ -18,6 +19,7 @@ class CropImageApp:
         self.canvas = tk.Canvas(self.dnd, cursor="cross", bg="gray")
         self.canvas.pack(fill="both", expand=True)
         self.square_crop = tk.BooleanVar(value=False)  # переключатель квадратного кропа
+        self.version_index_save = tk.BooleanVar(value=True)  # переключатель сохранения версий или всегда заменять
 
         # Переменные
         self.original_image = None
@@ -41,6 +43,8 @@ class CropImageApp:
         options_menu = tk.Menu(self.menu, tearoff=0)
         options_menu.add_checkbutton(label="Фиксировать квадрат", onvalue=True, offvalue=False,
                                      variable=self.square_crop)
+        options_menu.add_checkbutton(label="Сохранять новые версии в разные файлы", onvalue=True, offvalue=False,
+                                     variable=self.version_index_save)
         options_menu.add_command(label="Zoom reset",command=self.reset_zoom)
 
         self.menu.add_cascade(label="Опции", menu=options_menu)
@@ -230,13 +234,35 @@ class CropImageApp:
         base, ext = os.path.splitext(self.image_path if self.image_path else "image.png")
         ext = ext if ext else ".png"  # если нет расширения — по умолчанию PNG
 
-        new_image_path = f"{base}_crop{ext}"
+        new_image_path = f"{base}_crop{ext}" #сохранение будет происходить всегда в один и то-же файл (_crop)
+        if self.version_index_save.get():
+            new_image_path = self.versioned_path(new_image_path) #сохранение всех версий со счётчиком
 
         try:
             cropped_image.save(new_image_path)
             print(f"Изображение сохранено как {new_image_path}")
         except Exception as e:
             print(f"Ошибка при сохранении: {e}")
+
+    def versioned_path(self,image_path):  #именование файлов со счётчиком
+        folder = os.path.dirname(image_path)
+        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        extension = os.path.splitext(image_path)[1]  # Например, ".jpg"
+
+        # Регулярка для поиска файлов типа image_01.jpg
+        pattern = re.compile(rf"^{re.escape(base_name)}_(\d+){re.escape(extension)}$")
+
+        max_index = 0
+        for file in os.listdir(folder):
+            match = pattern.match(file)
+            if match:
+                index = int(match.group(1))
+                if index > max_index:
+                    max_index = index
+        new_index = max_index + 1
+        new_filename = f"{base_name}_{new_index:02d}{extension}"
+        new_path = os.path.join(folder, new_filename)
+        return new_path
 
     def on_drop(self, event):
         file_path = event.data.strip().strip('{}').replace('\\', '/')
