@@ -46,6 +46,7 @@ class CropImageApp:
         options_menu.add_checkbutton(label="Сохранять новые версии в разные файлы", onvalue=True, offvalue=False,
                                      variable=self.version_index_save)
         options_menu.add_command(label="Zoom reset",command=self.reset_zoom)
+        options_menu.add_command(label="Rotate image 90 deg right", command=self.rotate_image)
 
         self.menu.add_cascade(label="Опции", menu=options_menu)
 
@@ -263,6 +264,9 @@ class CropImageApp:
         new_filename = f"{base_name}_{new_index:02d}{extension}"
         new_path = os.path.join(folder, new_filename)
         return new_path
+    def rotate_image(self):
+        self.original_image = self.original_image.rotate(angle=90,expand=True)
+        self.resize_and_display(None)
 
     def on_drop(self, event):
         file_path = event.data.strip().strip('{}').replace('\\', '/')
