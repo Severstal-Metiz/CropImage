@@ -19,6 +19,9 @@ class CropImageApp:
         self.canvas = tk.Canvas(self.dnd, cursor="cross", bg="gray")
         self.canvas.pack(fill="both", expand=True)
         self.square_crop = tk.BooleanVar(value=False)  # переключатель квадратного кропа
+        self.fixed_resolution_crop = tk.BooleanVar(value=False)  # фиксированное разрешение
+        self.fixed_width = 1024
+        self.fixed_height = 1024
         self.version_index_save = tk.BooleanVar(value=True)  # переключатель сохранения версий или всегда заменять
 
         # Переменные
@@ -43,6 +46,15 @@ class CropImageApp:
         options_menu = tk.Menu(self.menu, tearoff=0)
         options_menu.add_checkbutton(label="Фиксировать квадрат", onvalue=True, offvalue=False,
                                      variable=self.square_crop)
+
+        resolution_menu = tk.Menu(options_menu, tearoff=0)
+        resolution_menu.add_radiobutton(label="1024 x 1024", command=lambda: self.set_fixed_resolution(1024, 1024))
+        resolution_menu.add_radiobutton(label="768 x 768", command=lambda: self.set_fixed_resolution(768, 768))
+        resolution_menu.add_radiobutton(label="512 x 512", command=lambda: self.set_fixed_resolution(512, 512))
+        options_menu.add_checkbutton(label="Фиксировать разрешение", onvalue=True, offvalue=False,
+                                     variable=self.fixed_resolution_crop)
+        options_menu.add_cascade(label="Выбрать разрешение", menu=resolution_menu)
+
         options_menu.add_checkbutton(label="Сохранять новые версии в разные файлы", onvalue=True, offvalue=False,
                                      variable=self.version_index_save)
         options_menu.add_command(label="Zoom reset",command=self.reset_zoom)
@@ -86,6 +98,10 @@ class CropImageApp:
         self.zoom_shift_y = 0
         self.zoom_factor = 1
         self.resize_and_display(None)
+
+    def set_fixed_resolution(self, width, height):
+        self.fixed_width = width
+        self.fixed_height = height
 
     def resize_and_display(self, event):
         if not self.original_image:
@@ -149,8 +165,15 @@ class CropImageApp:
         dx = self.cur_x - self.start_x
         dy = self.cur_y - self.start_y
 
-        if self.square_crop.get():
-            # Делает квадратную область по меньшей из сторон
+        if self.fixed_resolution_crop.get():
+            display_width = self.fixed_width * self.scale_ratio
+            display_height = self.fixed_height * self.scale_ratio
+
+            self.cur_x = self.start_x + display_width * (1 if dx >= 0 else -1)
+            self.cur_y = self.start_y + display_height * (1 if dy >= 0 else -1)
+
+
+        elif self.square_crop.get():
             side = min(abs(dx), abs(dy))
             self.cur_x = self.start_x + side * (1 if dx >= 0 else -1)
             self.cur_y = self.start_y + side * (1 if dy >= 0 else -1)
